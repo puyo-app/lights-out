@@ -3,429 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#050505">
-    <title>Neon Lights Out</title>
+    <title>Neon Morph Lights Out</title>
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIk5lb24gTW9ycGggTGlnaHRzIE91dCIsCiAgInNob3J0X25hbWUiOiAiTmVvbiBMaWdodHMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzAwMDAwMCIsCiAgInRoZW1lX2NvbG9yIjogIiMwMDAwMDAiCn0=">
     <style>
         :root {
-            --bg-color: #050505;
-            --panel-off: #121212; /* より黒に近づけました */
-            --panel-border: #333;
-            --neon-main: #0ff;
-            --neon-glow: 0 0 10px var(--neon-main), 0 0 20px var(--neon-main);
+            --bg-color: #000000;
+            --grid-cols: 5;
+            --grid-rows: 8;
         }
 
         * {
             box-sizing: border-box;
-            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
             user-select: none;
-            -webkit-user-select: none; /* Safari用 */
-            -webkit-tap-highlight-color: transparent; /* 重要: タップ時の灰色ハイライトを消す */
-            outline: none;
         }
 
-        body, html {
+        body {
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
             background-color: var(--bg-color);
+            color: white;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             overflow: hidden;
             display: flex;
             justify-content: center;
             align-items: center;
-            font-family: sans-serif;
-        }
-
-        /* Main Game Container */
-        #game-wrapper {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 10px;
+            height: 100vh;
+            width: 100vw;
         }
 
         #game-container {
-            /* グリッドの設定はJSで行うが、アスペクト比を維持して最大化する */
+            position: relative;
             width: 100%;
             height: 100%;
-            max-width: 100%;
-            max-height: 100%;
-            /* アスペクト比はJSでcols/rowsに基づいて設定するが、初期値として縦長を想定 */
-            aspect-ratio: 5 / 8; 
-            
             display: grid;
-            gap: 6px; /* 隙間を少し詰めて密度を上げる */
-            position: relative;
+            grid-template-columns: repeat(var(--grid-cols), 1fr);
+            grid-template-rows: repeat(var(--grid-rows), 1fr);
+            gap: 4px;
+            padding: 4px;
+            max-width: 600px; /* Mobile optimized width */
+            margin: auto;
         }
 
-        /* アスペクト比維持のためのフォールバック（縦長画面で横幅いっぱい、横長画面で高さいっぱい） */
-        @media (min-aspect-ratio: 5/8) {
-            #game-container {
-                width: auto;
-                height: 100%;
-            }
-        }
-        @media (max-aspect-ratio: 5/8) {
-            #game-container {
-                width: 100%;
-                height: auto;
-            }
-        }
-
-        /* The Panel */
         .panel {
-            background-color: var(--panel-off);
-            border: 1px solid var(--panel-border);
-            border-radius: 6px;
             position: relative;
+            border-radius: 8px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
-            transition: background-color 0.2s, box-shadow 0.2s, border-color 0.2s;
-            /* box-shadow: inset 0 0 5px rgba(0,0,0,0.8); */ /* パフォーマンスと見た目の簡素化 */
-        }
-        
-        /* 念押しでactive時のスタイルを明示的に指定（デフォルトの上書き） */
-        .panel:active {
-            background-color: var(--panel-off); 
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        /* Lit State */
-        .panel.is-lit {
-            background-color: rgba(255, 255, 255, 0.1);
-            border-color: var(--neon-main);
-            box-shadow: var(--neon-glow), inset 0 0 10px var(--neon-main);
-            z-index: 1;
-        }
-        
-        /* Lit時のActiveも色が消えないようにする */
-        .panel.is-lit:active {
-            background-color: rgba(255, 255, 255, 0.15); /* 押した時にほんの少し明るくするフィードバック */
+        /* Neon Glow Effect */
+        .panel.on {
+            box-shadow: 0 0 15px currentColor, inset 0 0 10px currentColor;
+            background-color: currentColor;
+            opacity: 0.9;
         }
 
-        /* Tap Effect (Flash) - 波紋のような白い光 */
-        .panel::after {
-            content: '';
+        .panel.off {
+            background-color: #111;
+            box-shadow: none;
+            color: #333 !important; /* Dimmed state */
+        }
+
+        /* Interaction Ripple */
+        .ripple {
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: white;
-            opacity: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0);
+            animation: ripple-animation 0.5s linear;
             pointer-events: none;
-            transition: opacity 0.3s ease-out;
-            border-radius: 4px;
         }
 
-        .panel.flash::after {
-            opacity: 0.5;
-            transition: none;
+        @keyframes ripple-animation {
+            to {
+                transform: scale(4);
+                opacity: 0;
+            }
         }
 
-        /* Win Animation Styles */
-        .panel.win-anim {
-            transition: background-color 0.1s, box-shadow 0.1s;
+        /* Congratulations Animation */
+        @keyframes celeb {
+            0% { transform: scale(1); opacity: 1; filter: hue-rotate(0deg); }
+            50% { transform: scale(1.05); opacity: 0.8; filter: hue-rotate(180deg); }
+            100% { transform: scale(1); opacity: 1; filter: hue-rotate(360deg); }
         }
-        
-        #blocker {
+
+        .celebrating .panel {
+            animation: celeb 0.5s ease-in-out infinite;
+        }
+
+        #overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: transparent;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
             z-index: 100;
-            display: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0);
+            transition: background 0.5s;
         }
 
+        .congrats-text {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 20px #0ff;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s;
+        }
+
+        .show-celeb .congrats-text {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
 
-    <div id="game-wrapper">
-        <div id="game-container"></div>
-    </div>
-    <div id="blocker"></div>
+<div id="game-container"></div>
+<div id="overlay">
+    <div class="congrats-text">CLEAR!</div>
+</div>
 
-    <script>
-        /**
-         * Game Configuration
-         */
-        const CONFIG = {
-            cols: 5, // 基本: 横5
-            rows: 8, // 基本: 縦8 (スマホ最適化)
-            minShuffle: 15, 
-            maxShuffle: 35,
-            colors: ['#0ff', '#f0f', '#0f0', '#ff0', '#f06', '#80f', '#08f']
-        };
+<script>
+    const ROWS = 8;
+    const COLS = 5;
+    const RARITY = {
+        COMMON: { id: 'common', color: '#00ffff', shapes: [[1,1]], weight: 60 },
+        UNCOMMON: { id: 'uncommon', color: '#00ff00', shapes: [[1,2], [2,1], [2,2]], weight: 25 },
+        RARE: { id: 'rare', color: '#bd00ff', shapes: [[1,3], [3,1], [2,3], [3,2]], weight: 10 },
+        EPIC: { id: 'epic', color: '#ff0055', shapes: [[1,4], [4,1], [1,5], [1,6], [2,4], [3,3]], weight: 4 },
+        LEGENDARY: { id: 'legendary', color: '#ffaa00', shapes: [[4,4], [1,8], [2,6]], weight: 1 }
+    };
 
-        const container = document.getElementById('game-container');
-        const blocker = document.getElementById('blocker');
-        
-        let grid = []; 
-        let panels = []; 
-        let isAnimating = false;
+    let panels = [];
+    let grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+    let lastTappedId = null;
+    let tapCount = 0;
+    let isAnimating = false;
 
-        /**
-         * Initialize Game
-         */
-        function initGame() {
-            container.innerHTML = '';
-            panels = [];
-            grid = Array(CONFIG.rows).fill().map(() => Array(CONFIG.cols).fill(false));
-            isAnimating = false;
-            blocker.style.display = 'none';
+    const container = document.getElementById('game-container');
 
-            // Random Neon Theme
-            const randomColor = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
-            document.documentElement.style.setProperty('--neon-main', randomColor);
+    function initGame() {
+        container.innerHTML = '';
+        panels = [];
+        grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+        isAnimating = false;
+        document.body.classList.remove('celebrating');
+        document.body.classList.remove('show-celeb');
 
-            // Grid Setup
-            container.style.gridTemplateColumns = `repeat(${CONFIG.cols}, 1fr)`;
-            container.style.gridTemplateRows = `repeat(${CONFIG.rows}, 1fr)`;
-            
-            // アスペクト比を動的にCSSに適用（CSSメディアクエリの補助）
-            container.style.aspectRatio = `${CONFIG.cols} / ${CONFIG.rows}`;
+        generateLayout();
+        renderPanels();
+        scramble();
+    }
 
-            // 1. Generate Layout with weighted random shapes
-            generateLayout();
+    function generateLayout() {
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (grid[r][c] !== null) continue;
 
-            // 2. Calculate Neighbors
-            calculateNeighbors();
-
-            // 3. Shuffle
-            shuffleBoard();
-        }
-
-        /**
-         * Generate Random Layout
-         * レアリティに基づいて形状を選択
-         */
-        function generateLayout() {
-            // 形状定義: [width, height]
-            const SHAPES = {
-                COMMON: [[1,1]], // 1x1 (穴埋め用)
-                UNCOMMON: [[1,2], [2,1], [2,2]], 
-                RARE: [[1,3], [3,1], [2,3], [3,2]], 
-                EPIC: [[1,4], [4,1], [1,5], [1,6], [2,4]], // かなり長い
-                LEGENDARY: [[4,4], [1,8], [2,6]] // 激レア: 4x4, 縦全通しなど
-            };
-
-            // 確率設定 (合計100になるように調整しなくても重みとして機能する)
-            // 大きいブロックから先に配置を試みる戦略をとる
-            
-            // まずレジェンダリーな巨大ブロックの配置を試みる (低確率で1回だけトライ)
-            if (Math.random() < 0.2) { // 20%の確率で巨大ブロック生成モード
-                tryPlaceRandomShape(SHAPES.LEGENDARY);
-            }
-
-            // 次にエピック・レアなブロックをいくつか配置試行
-            const bigBlockAttempts = Math.floor(Math.random() * 3) + 1;
-            for(let i=0; i<bigBlockAttempts; i++) {
-                if (Math.random() < 0.5) tryPlaceRandomShape(SHAPES.EPIC);
-                if (Math.random() < 0.7) tryPlaceRandomShape(SHAPES.RARE);
-            }
-
-            // 残りを埋めるループ
-            for (let y = 0; y < CONFIG.rows; y++) {
-                for (let x = 0; x < CONFIG.cols; x++) {
-                    if (grid[y][x]) continue;
-
-                    // この座標が空いている場合、ここを起点にブロックを置く
-                    // 残りのスペースに合わせて、UncommonかCommonを選択
-                    let placed = false;
-                    
-                    // 30%ぐらいでUncommon以上を試す
-                    if (Math.random() < 0.3) {
-                        placed = tryPlaceShapeAt(x, y, SHAPES.UNCOMMON);
-                    }
-
-                    // ダメならCommon (1x1)
-                    if (!placed) {
-                        placePanel(x, y, 1, 1);
-                    }
-                }
-            }
-        }
-
-        // 指定された形状リストからランダムに1つ選んで、ランダムな場所に配置を試みる
-        function tryPlaceRandomShape(shapeList) {
-            const [w, h] = shapeList[Math.floor(Math.random() * shapeList.length)];
-            // ランダムな位置を試行（最大10回トライ）
-            for(let i=0; i<10; i++) {
-                const tx = Math.floor(Math.random() * (CONFIG.cols - w + 1));
-                const ty = Math.floor(Math.random() * (CONFIG.rows - h + 1));
-                if (canFit(tx, ty, w, h)) {
-                    placePanel(tx, ty, w, h);
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // 特定の座標(x,y)を起点に、形状リストの中から置けるものを探す
-        function tryPlaceShapeAt(x, y, shapeList) {
-            // リストをシャッフル
-            const shuffled = [...shapeList].sort(() => Math.random() - 0.5);
-            for (let [w, h] of shuffled) {
-                if (canFit(x, y, w, h)) {
-                    placePanel(x, y, w, h);
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        function canFit(x, y, w, h) {
-            if (x + w > CONFIG.cols || y + h > CONFIG.rows) return false;
-            for (let dy = 0; dy < h; dy++) {
-                for (let dx = 0; dx < w; dx++) {
-                    if (grid[y + dy][x + dx]) return false;
-                }
-            }
-            return true;
-        }
-
-        function placePanel(x, y, w, h) {
-            // Update logic grid
-            for (let dy = 0; dy < h; dy++) {
-                for (let dx = 0; dx < w; dx++) {
-                    grid[y + dy][x + dx] = true;
-                }
-            }
-
-            const el = document.createElement('div');
-            el.className = 'panel';
-            // CSS Gridの配置
-            el.style.gridColumnStart = x + 1;
-            el.style.gridColumnEnd = x + 1 + w;
-            el.style.gridRowStart = y + 1;
-            el.style.gridRowEnd = y + 1 + h;
-            
-            const panelObj = {
-                id: panels.length,
-                el: el,
-                x: x, y: y, w: w, h: h,
-                lit: false,
-                neighbors: []
-            };
-
-            // Touch Handling (修正: touchstart/clickの重複防止と高速化)
-            // 'pointerdown' はスマホ・PC両対応で便利
-            el.addEventListener('pointerdown', (e) => {
-                if (isAnimating) return;
-                e.preventDefault(); 
-                handleTap(panelObj);
-            });
-
-            container.appendChild(el);
-            panels.push(panelObj);
-        }
-
-        function calculateNeighbors() {
-            for (let i = 0; i < panels.length; i++) {
-                for (let j = i + 1; j < panels.length; j++) {
-                    if (isAdjacent(panels[i], panels[j])) {
-                        panels[i].neighbors.push(panels[j]);
-                        panels[j].neighbors.push(panels[i]);
-                    }
-                }
-            }
-        }
-
-        function isAdjacent(p1, p2) {
-            const touchX = (p1.x < p2.x + p2.w) && (p1.x + p1.w > p2.x);
-            const touchY = (p1.y < p2.y + p2.h) && (p1.y + p1.h > p2.y);
-            const adjacentX = (p1.x === p2.x + p2.w) || (p1.x + p1.w === p2.x);
-            const adjacentY = (p1.y === p2.y + p2.h) || (p1.y + p1.h === p2.y);
-            return (touchX && adjacentY) || (touchY && adjacentX);
-        }
-
-        function toggle(panel, triggerVisuals = true) {
-            panel.lit = !panel.lit;
-            if (panel.lit) {
-                panel.el.classList.add('is-lit');
-            } else {
-                panel.el.classList.remove('is-lit');
-            }
-
-            if (triggerVisuals) {
-                panel.el.classList.remove('flash');
-                void panel.el.offsetWidth; 
-                panel.el.classList.add('flash');
-            }
-        }
-
-        function handleTap(targetPanel) {
-            toggle(targetPanel);
-            targetPanel.neighbors.forEach(n => toggle(n));
-            checkWin();
-        }
-
-        function shuffleBoard() {
-            const clicks = CONFIG.minShuffle + Math.floor(Math.random() * (CONFIG.maxShuffle - CONFIG.minShuffle));
-            
-            for (let i = 0; i < clicks; i++) {
-                const r = Math.floor(Math.random() * panels.length);
-                const p = panels[r];
-                p.lit = !p.lit;
-                p.neighbors.forEach(n => n.lit = !n.lit);
-            }
-
-            // Sync DOM
-            let anyLit = false;
-            panels.forEach(p => {
-                if (p.lit) {
-                    p.el.classList.add('is-lit');
-                    anyLit = true;
-                } else {
-                    p.el.classList.remove('is-lit');
-                }
-            });
-
-            // 万が一全部消えてたら、もう一回適当なところを押す
-            if (!anyLit) {
-                const p = panels[Math.floor(Math.random() * panels.length)];
-                toggle(p, false); // false = no flash
-                p.neighbors.forEach(n => toggle(n, false));
-            }
-        }
-
-        function checkWin() {
-            const allOff = panels.every(p => !p.lit);
-            if (allOff) {
-                playWinSequence();
-            }
-        }
-
-        function playWinSequence() {
-            isAnimating = true;
-            blocker.style.display = 'block';
-
-            setTimeout(() => {
-                const sortedPanels = [...panels].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+                // Pick rarity based on weights
+                const rarity = pickRarity();
+                const shape = rarity.shapes[Math.floor(Math.random() * rarity.shapes.length)];
                 
-                let delay = 0;
-                sortedPanels.forEach((p) => {
-                    setTimeout(() => {
-                        p.el.classList.add('is-lit');
-                        p.el.classList.add('win-anim');
-                    }, delay);
-                    
-                    setTimeout(() => {
-                        p.el.classList.remove('is-lit');
-                        setTimeout(() => p.el.classList.remove('win-anim'), 200);
-                    }, delay + 300);
+                let h = shape[0];
+                let w = shape[1];
 
-                    delay += 40;
-                });
+                // Check if fits, if not, shrink to 1x1
+                if (r + h > ROWS || c + w > COLS || !canPlace(r, c, h, w)) {
+                    h = 1;
+                    w = 1;
+                    // Force COMMON for 1x1 fallback to keep color consistent
+                    const fallbackRarity = RARITY.COMMON;
+                    placePanel(r, c, h, w, fallbackRarity);
+                } else {
+                    placePanel(r, c, h, w, rarity);
+                }
+            }
+        }
+    }
 
-                setTimeout(() => {
-                    initGame();
-                }, delay + 1200);
+    function pickRarity() {
+        const totalWeight = Object.values(RARITY).reduce((a, b) => a + b.weight, 0);
+        let random = Math.random() * totalWeight;
+        for (const key in RARITY) {
+            if (random < RARITY[key].weight) return RARITY[key];
+            random -= RARITY[key].weight;
+        }
+        return RARITY.COMMON;
+    }
 
-            }, 200);
+    function canPlace(r, c, h, w) {
+        for (let i = r; i < r + h; i++) {
+            for (let j = c; j < c + w; j++) {
+                if (grid[i][j] !== null) return false;
+            }
+        }
+        return true;
+    }
+
+    function placePanel(r, c, h, w, rarity) {
+        const id = panels.length;
+        const panel = {
+            id: id,
+            r: r,
+            c: c,
+            h: h,
+            w: w,
+            color: rarity.color,
+            isOn: false
+        };
+        panels.push(panel);
+        for (let i = r; i < r + h; i++) {
+            for (let j = c; j < c + w; j++) {
+                grid[i][j] = id;
+            }
+        }
+    }
+
+    function renderPanels() {
+        panels.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'panel off';
+            el.id = `panel-${p.id}`;
+            el.style.gridRow = `${p.r + 1} / span ${p.h}`;
+            el.style.gridColumn = `${p.c + 1} / span ${p.w}`;
+            el.style.color = p.color;
+            
+            el.addEventListener('pointerdown', (e) => handleTap(p.id, e));
+            container.appendChild(el);
+            p.el = el;
+        });
+    }
+
+    function scramble() {
+        // Randomly tap panels dozens of times to ensure solvability
+        const times = 30 + Math.floor(Math.random() * 20);
+        for (let i = 0; i < times; i++) {
+            const randomPanelId = Math.floor(Math.random() * panels.length);
+            toggleLogic(randomPanelId);
+        }
+        updateVisuals();
+        
+        // Ensure not already cleared
+        if (checkWin()) scramble();
+    }
+
+    function handleTap(id, e) {
+        if (isAnimating) return;
+
+        createRipple(e, panels[id].el);
+
+        // Give up logic
+        if (lastTappedId === id) {
+            tapCount++;
+            if (tapCount >= 6) {
+                giveUp();
+                return;
+            }
+        } else {
+            lastTappedId = id;
+            tapCount = 1;
         }
 
-        window.onload = initGame;
+        toggleLogic(id);
+        updateVisuals();
 
-    </script>
+        if (checkWin()) {
+            triggerWin();
+        }
+    }
+
+    function createRipple(e, el) {
+        const ripple = document.createElement('span');
+        ripple.className = 'ripple';
+        const rect = el.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${e.clientX - rect.left - size/2}px`;
+        ripple.style.top = `${e.clientY - rect.top - size/2}px`;
+        el.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 500);
+    }
+
+    function toggleLogic(id) {
+        const target = panels[id];
+        const affectedPanelIds = new Set();
+        affectedPanelIds.add(id);
+
+        // Check neighbors for all cells covered by this panel
+        for (let i = target.r; i < target.r + target.h; i++) {
+            for (let j = target.c; j < target.c + target.w; j++) {
+                // Check Up, Down, Left, Right
+                const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                neighbors.forEach(([dr, dc]) => {
+                    const nr = i + dr;
+                    const nc = j + dc;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                        const neighborId = grid[nr][nc];
+                        if (neighborId !== null) affectedPanelIds.add(neighborId);
+                    }
+                });
+            }
+        }
+
+        affectedPanelIds.forEach(pid => {
+            panels[pid].isOn = !panels[pid].isOn;
+        });
+    }
+
+    function updateVisuals() {
+        panels.forEach(p => {
+            if (p.isOn) {
+                p.el.classList.remove('off');
+                p.el.classList.add('on');
+            } else {
+                p.el.classList.remove('on');
+                p.el.classList.add('off');
+            }
+        });
+    }
+
+    function checkWin() {
+        return panels.every(p => !p.isOn);
+    }
+
+    function triggerWin() {
+        isAnimating = true;
+        document.body.classList.add('celebrating');
+        document.body.classList.add('show-celeb');
+        
+        // Randomly flicker panels during celebration
+        const celebInterval = setInterval(() => {
+            panels.forEach(p => {
+                if (Math.random() > 0.7) {
+                    p.isOn = !p.isOn;
+                }
+            });
+            updateVisuals();
+        }, 100);
+
+        setTimeout(() => {
+            clearInterval(celebInterval);
+            initGame();
+        }, 3000);
+    }
+
+    function giveUp() {
+        triggerWin();
+    }
+
+    // Handle Resize
+    window.addEventListener('resize', () => {
+        // Grid naturally adapts due to CSS Grid and viewport units
+    });
+
+    window.onload = initGame;
+</script>
 </body>
 </html>
