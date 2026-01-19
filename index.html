@@ -41,7 +41,7 @@
             grid-template-rows: repeat(var(--grid-rows), 1fr);
             gap: 4px;
             padding: 4px;
-            max-width: 600px; /* Mobile optimized width */
+            max-width: 600px;
             margin: auto;
         }
 
@@ -64,7 +64,7 @@
         .panel.off {
             background-color: #111;
             box-shadow: none;
-            color: #333 !important; /* Dimmed state */
+            color: #333 !important;
         }
 
         /* Interaction Ripple */
@@ -170,18 +170,15 @@
             for (let c = 0; c < COLS; c++) {
                 if (grid[r][c] !== null) continue;
 
-                // Pick rarity based on weights
                 const rarity = pickRarity();
                 const shape = rarity.shapes[Math.floor(Math.random() * rarity.shapes.length)];
                 
                 let h = shape[0];
                 let w = shape[1];
 
-                // Check if fits, if not, shrink to 1x1
                 if (r + h > ROWS || c + w > COLS || !canPlace(r, c, h, w)) {
                     h = 1;
                     w = 1;
-                    // Force COMMON for 1x1 fallback to keep color consistent
                     const fallbackRarity = RARITY.COMMON;
                     placePanel(r, c, h, w, fallbackRarity);
                 } else {
@@ -245,7 +242,6 @@
     }
 
     function scramble() {
-        // Randomly tap panels dozens of times to ensure solvability
         const times = 30 + Math.floor(Math.random() * 20);
         for (let i = 0; i < times; i++) {
             const randomPanelId = Math.floor(Math.random() * panels.length);
@@ -253,7 +249,7 @@
         }
         updateVisuals();
         
-        // Ensure not already cleared
+        // 初期状態でクリア判定にならないように再試行
         if (checkWin()) scramble();
     }
 
@@ -262,7 +258,6 @@
 
         createRipple(e, panels[id].el);
 
-        // Give up logic
         if (lastTappedId === id) {
             tapCount++;
             if (tapCount >= 6) {
@@ -299,10 +294,8 @@
         const affectedPanelIds = new Set();
         affectedPanelIds.add(id);
 
-        // Check neighbors for all cells covered by this panel
         for (let i = target.r; i < target.r + target.h; i++) {
             for (let j = target.c; j < target.c + target.w; j++) {
-                // Check Up, Down, Left, Right
                 const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]];
                 neighbors.forEach(([dr, dc]) => {
                     const nr = i + dr;
@@ -333,7 +326,9 @@
     }
 
     function checkWin() {
-        return panels.every(p => !p.isOn);
+        // すべて消灯 (all false) または すべて点灯 (all true) の場合にクリア
+        const firstState = panels[0].isOn;
+        return panels.every(p => p.isOn === firstState);
     }
 
     function triggerWin() {
@@ -341,7 +336,6 @@
         document.body.classList.add('celebrating');
         document.body.classList.add('show-celeb');
         
-        // Randomly flicker panels during celebration
         const celebInterval = setInterval(() => {
             panels.forEach(p => {
                 if (Math.random() > 0.7) {
@@ -360,11 +354,6 @@
     function giveUp() {
         triggerWin();
     }
-
-    // Handle Resize
-    window.addEventListener('resize', () => {
-        // Grid naturally adapts due to CSS Grid and viewport units
-    });
 
     window.onload = initGame;
 </script>
