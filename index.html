@@ -4,18 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Neon Morph Lights Out</title>
+    <!-- Simple PWA Manifest -->
     <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIk5lb24gTW9ycGggTGlnaHRzIE91dCIsCiAgInNob3J0X25hbWUiOiAiTmVvbiBMaWdodHMiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAic3RhbmRhbG9uZSIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzAwMDAwMCIsCiAgInRoZW1lX2NvbG9yIjogIiMwMDAwMDAiCn0=">
     <style>
         :root {
             --bg-color: #000000;
             --grid-cols: 5;
-            --grid-rows: 8;
         }
 
         * {
             box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
             user-select: none;
+            touch-action: none; /* Prevent browser gestures like zoom/scroll */
         }
 
         body {
@@ -23,7 +24,7 @@
             padding: 0;
             background-color: var(--bg-color);
             color: white;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Segoe UI', sans-serif;
             overflow: hidden;
             display: flex;
             justify-content: center;
@@ -38,61 +39,63 @@
             height: 100%;
             display: grid;
             grid-template-columns: repeat(var(--grid-cols), 1fr);
-            grid-template-rows: repeat(var(--grid-rows), 1fr);
-            gap: 4px;
-            padding: 4px;
-            max-width: 600px;
+            gap: 6px;
+            padding: 10px;
+            max-width: 500px; /* Optimized for mobile aspect ratio */
             margin: auto;
         }
 
         .panel {
             position: relative;
-            border-radius: 8px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 12px;
+            transition: transform 0.1s active, box-shadow 0.3s, background-color 0.3s;
             cursor: pointer;
             overflow: hidden;
             border: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         /* Neon Glow Effect */
         .panel.on {
-            box-shadow: 0 0 15px currentColor, inset 0 0 10px currentColor;
+            box-shadow: 0 0 15px currentColor, inset 0 0 8px currentColor;
             background-color: currentColor;
-            opacity: 0.9;
+            opacity: 0.95;
         }
 
         .panel.off {
-            background-color: #111;
+            background-color: #0a0a0a;
             box-shadow: none;
-            color: #333 !important;
+            color: #222 !important; /* Extremely dimmed */
         }
 
-        /* Interaction Ripple */
+        /* Animation for Tap */
         .ripple {
             position: absolute;
             border-radius: 50%;
-            background: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.6);
             transform: scale(0);
-            animation: ripple-animation 0.5s linear;
+            animation: ripple-animation 0.4s ease-out;
             pointer-events: none;
         }
 
         @keyframes ripple-animation {
             to {
-                transform: scale(4);
+                transform: scale(3);
                 opacity: 0;
             }
         }
 
-        /* Congratulations Animation */
-        @keyframes celeb {
-            0% { transform: scale(1); opacity: 1; filter: hue-rotate(0deg); }
-            50% { transform: scale(1.05); opacity: 0.8; filter: hue-rotate(180deg); }
-            100% { transform: scale(1); opacity: 1; filter: hue-rotate(360deg); }
+        /* Celebration Styles */
+        @keyframes celebration-pulse {
+            0% { transform: scale(1); filter: hue-rotate(0deg); }
+            50% { transform: scale(1.03); filter: hue-rotate(180deg); }
+            100% { transform: scale(1); filter: hue-rotate(360deg); }
         }
 
         .celebrating .panel {
-            animation: celeb 0.5s ease-in-out infinite;
+            animation: celebration-pulse 0.4s ease-in-out infinite;
         }
 
         #overlay {
@@ -111,18 +114,27 @@
         }
 
         .congrats-text {
-            font-size: 3rem;
-            font-weight: bold;
+            font-size: 5rem;
+            font-weight: 900;
             color: #fff;
-            text-shadow: 0 0 20px #0ff;
+            text-shadow: 0 0 20px #fff, 0 0 40px #0ff, 0 0 60px #0ff;
             opacity: 0;
-            transform: translateY(20px);
-            transition: all 0.5s;
+            transform: scale(0.2);
+            transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
         .show-celeb .congrats-text {
             opacity: 1;
-            transform: translateY(0);
+            transform: scale(1);
+        }
+
+        #info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            font-size: 10px;
+            color: #222;
+            pointer-events: none;
         }
     </style>
 </head>
@@ -132,10 +144,12 @@
 <div id="overlay">
     <div class="congrats-text">CLEAR!</div>
 </div>
+<div id="info"></div>
 
 <script>
-    const ROWS = 8;
     const COLS = 5;
+    let currentRows = 5; // Starting size 5x5
+
     const RARITY = {
         COMMON: { id: 'common', color: '#00ffff', shapes: [[1,1]], weight: 60 },
         UNCOMMON: { id: 'uncommon', color: '#00ff00', shapes: [[1,2], [2,1], [2,2]], weight: 25 },
@@ -145,20 +159,25 @@
     };
 
     let panels = [];
-    let grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+    let grid = [];
     let lastTappedId = null;
     let tapCount = 0;
     let isAnimating = false;
 
     const container = document.getElementById('game-container');
+    const info = document.getElementById('info');
 
-    function initGame() {
+    function initGame(win = false) {
+        if (win) currentRows++; // Increase height on clear
+
         container.innerHTML = '';
+        container.style.gridTemplateRows = `repeat(${currentRows}, 1fr)`;
+        info.textContent = `${COLS}x${currentRows}`;
+        
         panels = [];
-        grid = Array(ROWS).fill().map(() => Array(COLS).fill(null));
+        grid = Array(currentRows).fill().map(() => Array(COLS).fill(null));
         isAnimating = false;
-        document.body.classList.remove('celebrating');
-        document.body.classList.remove('show-celeb');
+        document.body.classList.remove('celebrating', 'show-celeb');
 
         generateLayout();
         renderPanels();
@@ -166,21 +185,19 @@
     }
 
     function generateLayout() {
-        for (let r = 0; r < ROWS; r++) {
+        for (let r = 0; r < currentRows; r++) {
             for (let c = 0; c < COLS; c++) {
                 if (grid[r][c] !== null) continue;
 
                 const rarity = pickRarity();
                 const shape = rarity.shapes[Math.floor(Math.random() * rarity.shapes.length)];
                 
-                let h = shape[0];
-                let w = shape[1];
+                let h = shape[0], w = shape[1];
 
-                if (r + h > ROWS || c + w > COLS || !canPlace(r, c, h, w)) {
-                    h = 1;
-                    w = 1;
-                    const fallbackRarity = RARITY.COMMON;
-                    placePanel(r, c, h, w, fallbackRarity);
+                // Boundary check and overlap check
+                if (r + h > currentRows || c + w > COLS || !canPlace(r, c, h, w)) {
+                    h = 1; w = 1;
+                    placePanel(r, c, h, w, RARITY.COMMON);
                 } else {
                     placePanel(r, c, h, w, rarity);
                 }
@@ -189,11 +206,11 @@
     }
 
     function pickRarity() {
-        const totalWeight = Object.values(RARITY).reduce((a, b) => a + b.weight, 0);
-        let random = Math.random() * totalWeight;
+        const total = Object.values(RARITY).reduce((acc, r) => acc + r.weight, 0);
+        let rand = Math.random() * total;
         for (const key in RARITY) {
-            if (random < RARITY[key].weight) return RARITY[key];
-            random -= RARITY[key].weight;
+            if (rand < RARITY[key].weight) return RARITY[key];
+            rand -= RARITY[key].weight;
         }
         return RARITY.COMMON;
     }
@@ -209,15 +226,7 @@
 
     function placePanel(r, c, h, w, rarity) {
         const id = panels.length;
-        const panel = {
-            id: id,
-            r: r,
-            c: c,
-            h: h,
-            w: w,
-            color: rarity.color,
-            isOn: false
-        };
+        const panel = { id, r, c, h, w, color: rarity.color, isOn: false };
         panels.push(panel);
         for (let i = r; i < r + h; i++) {
             for (let j = c; j < c + w; j++) {
@@ -234,7 +243,6 @@
             el.style.gridRow = `${p.r + 1} / span ${p.h}`;
             el.style.gridColumn = `${p.c + 1} / span ${p.w}`;
             el.style.color = p.color;
-            
             el.addEventListener('pointerdown', (e) => handleTap(p.id, e));
             container.appendChild(el);
             p.el = el;
@@ -242,26 +250,26 @@
     }
 
     function scramble() {
-        const times = 30 + Math.floor(Math.random() * 20);
-        for (let i = 0; i < times; i++) {
-            const randomPanelId = Math.floor(Math.random() * panels.length);
-            toggleLogic(randomPanelId);
+        // Must perform at least 30 random moves to ensure solvability
+        const moves = 30 + Math.floor(Math.random() * 20);
+        for (let i = 0; i < moves; i++) {
+            toggleLogic(Math.floor(Math.random() * panels.length));
         }
         updateVisuals();
-        
-        // 初期状態でクリア判定にならないように再試行
+        // Don't start in a cleared state
         if (checkWin()) scramble();
     }
 
     function handleTap(id, e) {
         if (isAnimating) return;
-
+        
         createRipple(e, panels[id].el);
 
+        // Giveaway/Give-up Logic (6 taps on same panel)
         if (lastTappedId === id) {
             tapCount++;
             if (tapCount >= 6) {
-                giveUp();
+                triggerWin(false); // No height increment
                 return;
             }
         } else {
@@ -272,90 +280,74 @@
         toggleLogic(id);
         updateVisuals();
 
-        if (checkWin()) {
-            triggerWin();
-        }
-    }
-
-    function createRipple(e, el) {
-        const ripple = document.createElement('span');
-        ripple.className = 'ripple';
-        const rect = el.getBoundingClientRect();
-        const size = Math.max(rect.width, rect.height);
-        ripple.style.width = ripple.style.height = `${size}px`;
-        ripple.style.left = `${e.clientX - rect.left - size/2}px`;
-        ripple.style.top = `${e.clientY - rect.top - size/2}px`;
-        el.appendChild(ripple);
-        setTimeout(() => ripple.remove(), 500);
+        if (checkWin()) triggerWin(true);
     }
 
     function toggleLogic(id) {
         const target = panels[id];
-        const affectedPanelIds = new Set();
-        affectedPanelIds.add(id);
+        const affected = new Set([id]);
 
-        for (let i = target.r; i < target.r + target.h; i++) {
-            for (let j = target.c; j < target.c + target.w; j++) {
-                const neighbors = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-                neighbors.forEach(([dr, dc]) => {
-                    const nr = i + dr;
-                    const nc = j + dc;
-                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+        // Check every cell of the multi-block for neighbors
+        for (let r = target.r; r < target.r + target.h; r++) {
+            for (let c = target.c; c < target.c + target.w; c++) {
+                [[1,0], [-1,0], [0,1], [0,-1]].forEach(([dr, dc]) => {
+                    const nr = r + dr, nc = c + dc;
+                    if (nr >= 0 && nr < currentRows && nc >= 0 && nc < COLS) {
                         const neighborId = grid[nr][nc];
-                        if (neighborId !== null) affectedPanelIds.add(neighborId);
+                        if (neighborId !== null) affected.add(neighborId);
                     }
                 });
             }
         }
 
-        affectedPanelIds.forEach(pid => {
+        affected.forEach(pid => {
             panels[pid].isOn = !panels[pid].isOn;
         });
     }
 
     function updateVisuals() {
         panels.forEach(p => {
-            if (p.isOn) {
-                p.el.classList.remove('off');
-                p.el.classList.add('on');
-            } else {
-                p.el.classList.remove('on');
-                p.el.classList.add('off');
-            }
+            p.el.className = p.isOn ? 'panel on' : 'panel off';
         });
     }
 
     function checkWin() {
-        // すべて消灯 (all false) または すべて点灯 (all true) の場合にクリア
-        const firstState = panels[0].isOn;
-        return panels.every(p => p.isOn === firstState);
+        if (panels.length === 0) return false;
+        const first = panels[0].isOn;
+        return panels.every(p => p.isOn === first);
     }
 
-    function triggerWin() {
+    function triggerWin(success) {
         isAnimating = true;
-        document.body.classList.add('celebrating');
-        document.body.classList.add('show-celeb');
-        
-        const celebInterval = setInterval(() => {
+        document.body.classList.add('celebrating', 'show-celeb');
+
+        // Flashy celebration interval
+        const interval = setInterval(() => {
             panels.forEach(p => {
-                if (Math.random() > 0.7) {
-                    p.isOn = !p.isOn;
-                }
+                if (Math.random() > 0.5) p.isOn = !p.isOn;
             });
             updateVisuals();
-        }, 100);
+        }, 70);
 
         setTimeout(() => {
-            clearInterval(celebInterval);
-            initGame();
+            clearInterval(interval);
+            initGame(success);
         }, 3000);
     }
 
-    function giveUp() {
-        triggerWin();
+    function createRipple(e, el) {
+        const ripple = document.createElement('div');
+        ripple.className = 'ripple';
+        const rect = el.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height) * 2;
+        ripple.style.width = ripple.style.height = `${size}px`;
+        ripple.style.left = `${e.clientX - rect.left - size/2}px`;
+        ripple.style.top = `${e.clientY - rect.top - size/2}px`;
+        el.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 400);
     }
 
-    window.onload = initGame;
+    window.onload = () => initGame(false);
 </script>
 </body>
 </html>
